@@ -20,6 +20,11 @@ Provision this process with its distinct application role and
 and Indexer role names. Indexer neither ships nor runs a migration binary.
 Fresh roles need SELECT on documents/files/chunks and UPDATE on files/chunks;
 they need no artifact, upload, registry, runtime or DDL database privileges.
+During rollback compatibility with the archived monorepo Indexer, retain its
+additional SELECT on `knowledge.artifacts` and `knowledge.artifact_refs`:
+that legacy binary's broad readiness probe requires them. Fresh deployments of
+this Indexer need neither. Permission retirement ends that old rollback option
+unless the old probe is separately patched and verified.
 
 Each sweep retains the existing three-second cadence, bounded backfill batches
 and at most ten pending IDs. A file is processed sequentially. Its owner package
@@ -45,5 +50,9 @@ Unit tests exercise scheduling failure/cancellation. Knowledge's owner tests
 exercise the shared protocol with real PostgreSQL, both restricted roles,
 process termination during an external upload, unknown-effect handling and
 stable Milvus retry IDs; external providers in these fixtures are synthetic.
-Neither fixture success nor compilation proves a real configured RAG backend
-or all production HA/scale targets. Windows release testing is still pending.
+Windows independent upgrade/rollback preserves existing data and non-target
+processes. Actual archived old/new executable handoff also passed interrupted
+upload recovery and rollback to a saved track receipt. The first such fixture
+run exposed the old readiness permissions described above; the failure is
+retained. Neither fixture success nor compilation proves a real configured RAG
+backend, machine-failure HA, or all production scale targets.
