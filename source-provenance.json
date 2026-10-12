@@ -1,0 +1,26 @@
+{
+  "sdk": {
+    "version": "v0.1.0-rc.2",
+    "module_sum": "h1:SunD5Oyh1le4sv3CMJTpKCa0SsKBQDqXoBoAC0aji98=",
+    "zip_sha256": "6381fef8a276eb62f52329142549d933a6630c0235bd3a50c7ebb4d922b8c3b4",
+    "commit": "f45ca168dee81f864533a8f77f8c203960caad1a",
+    "module": "github.com/euler-gaozl/agent-os-sdk"
+  },
+  "format": 1,
+  "owner_modules": [
+    {
+      "protocol": "knowledge-indexing-v1",
+      "version": "v0.1.0-rc.1",
+      "module": "github.com/euler-gaozl/agent-os-knowledge",
+      "module_sum": "h1:HZnGpJI81snXYP0mLiI+Wim+IGDrKXnONVhCsqsHG8M=",
+      "commit": "e26584df4f1df22da6f3ee9101933dae8f48d164",
+      "go_mod_sum": "h1:lviyaS6yKk3K9HbzBQp4QEzIbZDhgdWymiUEa12/pZc=",
+      "package": "indexing"
+    }
+  ],
+  "extracted_from": {
+    "repository": "euler-gaozl/agent-os",
+    "commit": "a1a3fc656065f69f8a362b19f0f40d9e9a85ad3f"
+  },
+  "distribution": "Go-generated canonical module from Git transport mirror verified against private remote SHA; committed narrow vendor; no local replace"
+}
