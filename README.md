@@ -1,58 +1,38 @@
 # Agent OS Indexer
 
-Independent process that schedules knowledge indexing. Knowledge is the sole
-database schema and transaction owner; this process consumes its fixed
-`indexing` Go module package. It imports no Knowledge HTTP, upload, retrieval,
-admin routes or migration implementation, and contains no business SQL.
+独立的知识库后台索引进程。Knowledge 是数据库结构和事务的唯一维护方；Indexer 消费固定版本的 `indexing` Go 包，不包含业务 SQL、迁移、上传、检索或管理路由。
 
-## Deploy separately
+## 调度与恢复
 
-Go 1.27.2. Build with `GOWORK=off GOPROXY=off go build -mod=vendor ./cmd/indexer`,
-`./scripts/Build.ps1`, or the repository Dockerfile. No adjacent checkout is
-required. Configure the template in `deploy/service.example.json`; real secrets
-belong in a protected configuration file. Port defaults to 8097; empty Registry
-and Runtime URLs retain local ports 8096 and 8094 after config loading. Container
-deployments must supply explicit service URLs. Runtime receives instance
-heartbeats; authenticated readiness checks only this consumer's required tables.
+每 3 秒扫描，补齐批次有界，每轮最多读取 10 个待处理 ID，并逐文件处理。待处理 ID 只是提示，真正互斥及状态重读由 Knowledge 协议负责。文件处理用一条连接持有 advisory lock，另一条执行查询，连接池至少 2、默认 3；不能不经重设计就把并发提高到连接池上限。
 
-Provision this process with its distinct application role and
-`search_path=knowledge`. Run **Knowledge's** migration once with both Knowledge
-and Indexer role names. Indexer neither ships nor runs a migration binary.
-Fresh roles need SELECT on documents/files/chunks and UPDATE on files/chunks;
-they need no artifact, upload, registry, runtime or DDL database privileges.
-During rollback compatibility with the archived monorepo Indexer, retain its
-additional SELECT on `knowledge.artifacts` and `knowledge.artifact_refs`:
-that legacy binary's broad readiness probe requires them. Fresh deployments of
-this Indexer need neither. Permission retirement ends that old rollback option
-unless the old probe is separately patched and verified.
+LightRAG 上传效果未知时等待人工核对；已有 track ID 只轮询，不重新上传。Milvus 重试使用稳定分块 ID。处理始终使用文件留存的固定配置，不跟随 Registry 最新版本变化。供应商或数据库失败不会终止调度器，后续轮次继续恢复；取消停止后续文件处理。
 
-Each sweep retains the existing three-second cadence, bounded backfill batches
-and at most ten pending IDs. A file is processed sequentially. Its owner package
-holds one connection's advisory lock and uses another for queries: the pool
-must have at least two connections (default three). Multiple processes may run
-against this domain; a pending ID is only a hint, and lock acquisition plus
-authoritative state re-read occurs inside the owner protocol.
+## 独立构建与运行
 
-LightRAG's unknown effects require operator reconciliation; a persisted track
-ID is polled without uploading again. Milvus retries retain chunk IDs. The
-configuration saved with each file is used even if Registry's latest resource
-has changed. A provider or database error does not terminate the scheduler;
-recovery continues in a later sweep. Cancellation stops further files.
+需要 Go 1.27.2，数据域使用 PostgreSQL。
 
-## Compatibility and evidence
+```powershell
+$env:GOWORK='off'; $env:GOPROXY='off'
+./scripts/Build.ps1
+go test -mod=vendor -count=1 ./...
+go vet -mod=vendor ./...
+```
 
-Both the Indexer commit and the actual Knowledge module version/checksum belong
-in release provenance. The wire/data contract is in
-`deploy/release-contract.json`; old imports must remain recoverable across
-independent Knowledge/Indexer upgrades and rollback. No reverse migrations.
+也可 `go build -mod=vendor ./cmd/indexer` 或使用本仓 Dockerfile。固定依赖和提交的 `vendor` 不要求相邻 Knowledge 源码。
 
-Unit tests exercise scheduling failure/cancellation. Knowledge's owner tests
-exercise the shared protocol with real PostgreSQL, both restricted roles,
-process termination during an external upload, unknown-effect handling and
-stable Milvus retry IDs; external providers in these fixtures are synthetic.
-Windows independent upgrade/rollback preserves existing data and non-target
-processes. Actual archived old/new executable handoff also passed interrupted
-upload recovery and rollback to a saved track receipt. The first such fixture
-run exposed the old readiness permissions described above; the failure is
-retained. Neither fixture success nor compilation proves a real configured RAG
-backend, machine-failure HA, or all production scale targets.
+[配置示例](deploy/service.example.json) 使用独立的应用角色及 `search_path=knowledge`，默认端口 8097，空 Registry/Runtime 地址保留回环 8096/8094。多机部署显式填写服务地址。就绪检查只验证本进程所需表，Runtime 接收实例心跳。
+
+## 数据权限与版本兼容
+
+必须由 **Knowledge 的迁移程序**一次授予 Knowledge 与 Indexer 两个账号权限；Indexer 不附带也不执行迁移。新账号只需 documents/files/chunks SELECT 与 files/chunks UPDATE，不需上传、Registry、Runtime、artifact 或 DDL 权限。
+
+若旧单仓 Indexer 仍是回滚目标，应保留它 readiness 所需的 `knowledge.artifacts`、`knowledge.artifact_refs` SELECT。撤销旧权限意味着结束旧程序回滚窗口，不能同时声称兼容。
+
+发布时固定 Indexer 提交、Knowledge 模块版本/校验和及 [发布契约](deploy/release-contract.json)。独立更新和回滚必须保留旧资料及未完成导入；不做反向数据库迁移。
+
+## 验证状态
+
+单元测试覆盖调度失败和取消。Knowledge 的真实 PostgreSQL 测试覆盖两个受限角色、上传中断、未知效果和 Milvus 稳定 ID，外部提供者为模拟服务。Windows 独立升级/回滚及真实旧/新 Indexer 接力已验证，但这些不证明真实 RAG 后端可用、机器故障高可用或最终容量。
+
+Actions 日常关闭。[历史记录](docs/history/service-notes-20261014.en.md) 保留最初旧 readiness 权限失败和后续验收边界。
